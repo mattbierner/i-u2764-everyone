@@ -1,9 +1,11 @@
 # I U+2764 Everyone
-To celebrate Valentine's Day, I've decided to use Twitter to send a personal and heartfelt message of love to each and every one of my 300 million fellow creatures. But, as much as I love all of you, the prospect of actually typing out 300 million tweets was just not that appealing, so instead I told my computer how to share love on my behalf.
+To celebrate Valentine's Day, I've decided to use Twitter to send a personal and heartfelt message of love to each and every one of my 300 million fellow creatures. But, as much as I love all of you, the prospect of actually typing out 300 million tweets was just not that appealing, so instead I taught my computer how to share love on my behalf.
 
 This repo contains a simple Twitter bot script that builds up a database of sad, lonely, little users and, once every five minutes, picks a lucky lover for whom the bot tweets, "@USER, I ❤️ you". Each user will be loved at most once. At this rate, the bot should finish its first iteration in around 3000 years.
 
 [See it in action @\_LovedArt while you still can][_lovedart].
+
+** Update ** – Alas! banned after a mere 31 messages of love. But I've seen the error of my ways and created a [new bot to continue spreading love to everything](https://github.com/mattbierner/i-u2764-everything).
 
 ### Why?
 Why not? The world needs more love.

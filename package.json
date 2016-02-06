@@ -1,6 +1,6 @@
 {
-  "dependencies": {
-    "nedb": "^1.7.4",
-    "twitter": "^1.2.0"
-  }
+    "dependencies": {
+        "nedb": "^1.7.4",
+        "twitter": "^1.2.0"
+    }
 }

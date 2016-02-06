@@ -17,8 +17,21 @@ const QUEUE_SIZE = 100;
 // Maximum number of users to sample each time. May not be unique.
 const BUFFER_SIZE = 50;
 
-// Disable actual @mentions
-const DEBUG = false;
+// Disable actual postings
+const DEBUG = true;
+
+// Keep around in-memory cache to prevent getting stuck on a single item.
+const CACHE_LIMIT = 10;
+
+let temp_cache = [];
+
+const add_cache = (x) => {
+    temp_cache.unshift(x);
+    // unduplicate
+    temp_cache = temp_cache.filter((x, pos) => temp_cache.indexOf(x) === pos);
+    while (temp_cache.length > CACHE_LIMIT)
+        temp_cache.pop();
+};
 
 
 const client = new Twitter({
@@ -33,31 +46,24 @@ const db = new Datastore({ filename: DB_FILE, autoload: true });
 /**
     Select a user from the database,
 */
-const get_user_entry = (screenName, k) =>
-    db.findOne({ _id: screenName }, k);
+const get_user_entry = (user, k) =>
+    db.findOne({ user: user }, k);
 
 /**
     Try to add a user to the database if one does not already exist.
 */
-const ensure_user_entry = (screenName) =>
+const ensure_user_entry = (user) =>
     new Promise((resolve, reject) =>
-        get_user_entry(screenName, (err, result) => {
-            if (err)
-                return reject(err);
-            if (result !== null)
-                return resolve(result);
-            // Create new
-            db.insert({ _id: screenName, messaged_at: 0 },
-                (err, result) =>
-                    err ? reject(err) : resolve(result));
-        }));
+        db.update({ user: user }, { $set: { user: user } }, { upsert: true },
+            (err, result) =>
+                err ? reject(err) : resolve(result)));
 
 /**
     Get users who are in database but have not been messaged yet.
 */
 const get_unloved_user_entries = () =>
     new Promise((resolve, reject) =>
-        db.find({ messaged_at: 0 },
+        db.find({ messaged_at: { $exists: false } },
             (err, result) => err ? reject(err) : resolve(result)));
 
 /**
@@ -67,21 +73,20 @@ const populate_users = (k) =>
     client.stream('statuses/sample', {}, (stream) => {
         stream.on('data', tweet => {
             if (tweet && tweet.user && tweet.user.screen_name) {
-                const screenName = tweet.user.screen_name;
-                if (!k(screenName))
+                if (!k(tweet.user.screen_name))
                     stream.destroy();
             }
         });
 
         stream.on('error', e => {
-            console.error(e);
+            console.error('stream error', e);
         });
     });
 
 /**
     Try to make sure we have a good set of unloved users to pick from.
 */
-const ensure_future_lovers = () =>
+const ensure_future_users = () =>
     get_unloved_user_entries()
         .then(users => {
             if (users.length > QUEUE_SIZE)
@@ -89,11 +94,11 @@ const ensure_future_lovers = () =>
 
             return new Promise((resolve) => {
                 let required = BUFFER_SIZE;
-                populate_users(screenName => {
-                    ensure_user_entry(screenName).catch(console.error);
+                populate_users(user => {
+                    ensure_user_entry(user).catch(e => console.error('ensure error', e));
                     if (required-- < 0) {
                         resolve();
-                        return false;
+                        return false; /* done */
                     }
                     return true; /* continue */
                 });
@@ -101,59 +106,76 @@ const ensure_future_lovers = () =>
         });
 
 /**
-    Select a sad, lonely user who needs some love.
+    Select a user who needs some love.
 */
 const pick_user = () =>
     new Promise((resolve, reject) =>
-        db.findOne({ messaged_at: 0 },
+        db.findOne({ $and: [ { messaged_at: { $exists: false } }, { user: { $nin: temp_cache } }] },
             (err, result) => {
                 if (err)
                     return reject(err);
                 if (!result)
-                    return reject("nobody to share the love with :(");
-                resolve(result._id);
+                    return reject("no one to share the love with :(");
+                resolve(result.user);
             }));
 
 /**
     Make sure not to share too much love by marking when a user has been messaged.
 */
-const update_user = (screenName) =>
+const update_user = (user) =>
     new Promise((resolve, reject) =>
-        db.update({ _id: screenName },
+        db.update({ user: user },
             { $set: { messaged_at: Date.now() }},
             {},
-            (err) => err ? reject(err) : resolve(screenName)));
+            (err) => err ? reject(err) : resolve(user)));
 
 /**
-    Generate a personalized messsage of heartfelt love.
+    Generate an expression of boundless love.
 */
 const status_message = (user) =>
-    (DEBUG ? user : '@' + user) + ', I \u{2764} you';
+    '@' + user + ", I \u{2764} you";
 
 /**
     Post the love.
 */
-const share_the_love = (screenName) =>
-    new Promise((resolve, reject) =>
-        client.post('statuses/update', { status: status_message(screenName) },
+const share_the_love = (user) => {
+    add_cache(user);
+
+    return new Promise((resolve, reject) =>
+        DEBUG ? resolve(user) :
+        client.post('statuses/update', { status: status_message(user) },
             (err, tweet, response) =>
-                err ? reject(err) : resolve(screenName)));
+                err ? reject(err) : resolve(user)));
+};
 
 /**
     Spread love to the world.
 */
 const spread_the_love = () =>
-    ensure_future_lovers().then(() =>
-        pick_user()
-            .then(share_the_love)
+    ensure_future_users().then(pick_user).then(user =>
+        share_the_love(user)
             .then(update_user)
-            .then(screenName => {
-                console.log('Shared the love with ' + screenName);
+            .then(user => {
+                console.log('Shared the love with ' + user);
                 setTimeout(spread_the_love, INTERVAL);
             })
-            .catch((err) => {
-                console.error(err);
-                setTimeout(spread_the_love, INTERVAL);
-            }));
+            .catch(err => {
+                console.error('post error', err);
+                if (err && err[0] && err[0].code === 187) {
+                    console.error('Duplicate detected by Twitter, added entry to cache and will retry', user);
+                    setTimeout(spread_the_love, 250);
+                } else {
+                    setTimeout(spread_the_love, INTERVAL);
+                }
+            }))
+    .catch(err => {
+        console.error('pick error', err);
+    });
 
-spread_the_love();
+db.ensureIndex({ fieldName: 'user' }, err => {
+    if (err) {
+        console.error('index error', err);
+        return;
+    }
+    spread_the_love();
+});
