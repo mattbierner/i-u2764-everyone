@@ -5,7 +5,11 @@ This repo contains a simple Twitter bot script that builds up a database of sad,
 
 [See it in action @\_LovedArt while you still can][_lovedart].
 
-** Update ** – Alas! banned after a mere 31 messages of love. But I've seen the error of my ways and created a [new bot to continue spreading love to everything](https://github.com/mattbierner/i-u2764-everything).
+*****
+
+**Update**
+
+Alas! banned after a mere 31 messages. But I've seen the error of my ways and created a [new bot to continue spreading love to everything](https://github.com/mattbierner/i-u2764-everything).
 
 ### Why?
 Why not? The world needs more love.
