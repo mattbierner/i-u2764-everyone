@@ -18,7 +18,7 @@ const QUEUE_SIZE = 100;
 const BUFFER_SIZE = 50;
 
 // Disable actual postings
-const DEBUG = true;
+const DEBUG = false;
 
 // Keep around in-memory cache to prevent getting stuck on a single item.
 const CACHE_LIMIT = 10;
